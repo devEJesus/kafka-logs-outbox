@@ -1,39 +1,74 @@
+using Confluent.Kafka;
+using Kafka.Contracts;
+using KafkaFlow;
+using KafkaFlow.Outbox;
+using KafkaFlow.Outbox.Postgres;
+using KafkaFlow.Producers;
+using KafkaFlow.Serializer;
+using Npgsql;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-var app = builder.Build();
+var connectionString = builder.Configuration.GetConnectionString("PostgresConnection");
 
-// Configure the HTTP request pipeline.
+// Shared datasource for Postgres
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+var dataSource = dataSourceBuilder.Build();
+
+builder.Services
+    .AddSingleton(dataSource)
+    .AddPostgresOutboxBackend();
+
+builder.Services
+    .AddSingleton(dataSource)
+    .AddPostgresOutboxBackend();
+
+builder.Services.AddKafka(kafka => kafka
+    .UseMicrosoftLog()
+    .AddCluster(cluster => cluster
+        .WithBrokers(new[] { "localhost:9092" })
+
+        // Outbox dispatcher
+        .AddOutboxDispatcher(dispatcher =>
+            dispatcher.WithPartitioner(Partitioner.Murmur2Random)
+        )
+
+        .AddProducer("order-producer", producer => producer
+            .DefaultTopic("order-topic")
+            .WithOutbox()
+            .AddMiddlewares(m => m.AddSerializer<JsonCoreSerializer>())
+        )
+    )
+);
+
+
+var app = builder.Build();
+var kafkaBus = app.Services.CreateKafkaBus();
+await kafkaBus.StartAsync();
+
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-var summaries = new[]
+app.MapGet("/new-order", async (IProducerAccessor producerAccessor) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    var orderCreated = new OrderCreated
+    {
+        Id = Guid.NewGuid(),
+        Item = "Enterprise license",
+        Amount = 500.00m
+    };
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+    var producer = producerAccessor.GetProducer("order-producer");
+
+    await producer.ProduceAsync(orderCreated.Id.ToString(), orderCreated);
+
+    return Results.Ok(orderCreated);
 })
-.WithName("GetWeatherForecast");
+.WithName("NewOrder");
 
 app.Run();
-
-internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

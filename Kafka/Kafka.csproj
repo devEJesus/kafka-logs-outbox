@@ -8,7 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Contrib.KafkaFlow.Outbox" Version="4.1.9" />
+    <PackageReference Include="Contrib.KafkaFlow.Outbox.Postgres" Version="4.1.9" />
+    <PackageReference Include="KafkaFlow" Version="4.1.0" />
+    <PackageReference Include="KafkaFlow.Extensions.Hosting" Version="4.1.0" />
+    <PackageReference Include="KafkaFlow.LogHandler.Console" Version="4.1.0" />
+    <PackageReference Include="KafkaFlow.LogHandler.Microsoft" Version="4.1.0" />
+    <PackageReference Include="KafkaFlow.Microsoft.DependencyInjection" Version="4.1.0" />
+    <PackageReference Include="KafkaFlow.Serializer.JsonCore" Version="4.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+    <PackageReference Include="Npgsql" Version="10.0.1" />
   </ItemGroup>
 
 </Project>
